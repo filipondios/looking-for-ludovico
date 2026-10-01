@@ -1,8 +1,12 @@
 local LFL = RegisterMod('Looking for Ludovico', 1)
 
+LFL.found_item = false
+LFL.initial_room_idx = nil
+LFL.scanning = false
+
 
 --- Returns true if the current level can have a treasure room.
---- In Hard mode, there are treasure rooms in all levels up to 
+--- In Hard mode, there are treasure rooms in all levels up to
 --- the level with Mom's fight.
 ---@param level Level
 local function IsTreasureRoomInLevel(level)
@@ -10,28 +14,53 @@ local function IsTreasureRoomInLevel(level)
 end
 
 
---- Hides a room and its adjacent rooms in the map.
---- @param room RoomDescriptor
+--- Saves the map state (display flags and visit count) of every room
+--- in the level, indexed by the room's SafeGridIndex.
+---
+--- Instead of trying to guess which rooms the game reveals when we
+--- teleport to the treasure room (the room itself, its neighbours, secret
+--- rooms, etc.), we remember the state of ALL rooms and put it back later.
 --- @param level Level
-local function HideRoomAndAdjacents(room, level)
+--- @return table
+local function SnapshotMap(level)
+	local snapshot = {}
+	local rooms = level:GetRooms()
 
-	local wrd = level:GetRoomByIdx(room.SafeGridIndex)
-	wrd.DisplayFlags = 0
-	wrd.VisitedCount = 0
-
-	for offset in ipairs({13, -1, 1, -13}) do
-		wrd = level:GetRoomByIdx(room.SafeGridIndex + offset)
-
-		if wrd then
-			wrd.DisplayFlags = 0
-		end
+	for i = 0, #rooms - 1 do
+		local desc = rooms:Get(i)
+		snapshot[desc.SafeGridIndex] = {
+			DisplayFlags = desc.DisplayFlags,
+			VisitedCount = desc.VisitedCount,
+		}
 	end
+	return snapshot
+end
+
+
+--- Restores a map state previously saved with SnapshotMap.
+--- @param level Level
+--- @param snapshot table
+local function RestoreMap(level, snapshot)
+	for idx, state in pairs(snapshot) do
+		-- Descriptors from GetRoomByIdx are writable (the ones from
+		-- GetRooms are read-only).
+		local desc = level:GetRoomByIdx(idx)
+		desc.DisplayFlags = state.DisplayFlags
+		desc.VisitedCount = state.VisitedCount
+	end
+
+	-- Make the minimap pick up the restored flags.
+	level:UpdateVisibility()
 end
 
 
 LFL:AddCallback(ModCallbacks.MC_POST_NEW_LEVEL, function()
 	local game = Game()
 	local level = game:GetLevel()
+
+	-- Never carry state over from the previous level.
+	LFL.found_item = false
+	LFL.initial_room_idx = nil
 
 	if game:IsGreedMode() or (not IsTreasureRoomInLevel(level)) then
 		-- Greed mode not supported and we can skip levels after
@@ -40,52 +69,59 @@ LFL:AddCallback(ModCallbacks.MC_POST_NEW_LEVEL, function()
 	end
 
 	local levelRoomsList = level:GetRooms()
-	local iPosition = Isaac.GetPlayer(0).Position
+	local player = Isaac.GetPlayer(0)
+	local iPosition = player.Position
 	local iRoomIdx  = level:GetCurrentRoomIndex()
 
-	LFL.found_item = false
+	-- Remember how the map looks BEFORE we start jumping around.
+	local mapSnapshot = SnapshotMap(level)
 
-	for  i=0, #levelRoomsList - 1 do
+	-- Ignore MC_POST_NEW_ROOM while we are teleporting.
+	LFL.scanning = true
+
+	for i = 0, #levelRoomsList - 1 do
 		local room = levelRoomsList:Get(i)
 
 		if room.Data.Type == RoomType.ROOM_TREASURE then
 
 			-- Change room to force item load/generation
-			Isaac.GetPlayer(0).Position = Vector(350,0)
+			player.Position = Vector(350,0)
 			game:ChangeRoom(room.GridIndex)
 
 			local pickups = Isaac.FindByType(
-				EntityType.ENTITY_PICKUP, 
+				EntityType.ENTITY_PICKUP,
 				PickupVariant.PICKUP_COLLECTIBLE,
 				-1, false, false
 			)
 
 			for _, pickup in ipairs(pickups) do
-				if pickup then
-					-- Ensure that the collectible is not nil and its the item we are looking for.
-					local collectible = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
-
-					if collectible and collectible.ID == CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE then
-						game:GetPlayer(0):AnimateHappy()
-						LFL.found_item = true
-						break
-					end
+				if pickup.SubType == CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE then
+					game:GetPlayer(0):AnimateHappy()
+					LFL.found_item = true
+					break
 				end
 			end
 
-			-- Come back to the initial room
-			HideRoomAndAdjacents(room, level)
 			game:GetRoom():Update()
 
-			Isaac.GetPlayer(0).Position = iPosition
+			-- Come back to the initial room
 			game:ChangeRoom(iRoomIdx)
-			LFL.initial_room = game:GetRoom()
+			-- (the position must be set AFTER the room change, otherwise
+			-- the game overrides it)
+			Isaac.GetPlayer(0).Position = iPosition
 
 			if LFL.found_item then
 				break
 			end
 		end
 	end
+
+	-- Put the map back exactly as it was: treasure room unvisited and no
+	-- room revealed by the trip.
+	RestoreMap(level, mapSnapshot)
+
+	LFL.scanning = false
+	LFL.initial_room_idx = iRoomIdx
 end)
 
 
@@ -107,8 +143,13 @@ end)
 
 
 LFL:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, function()
-	if LFL.initial_room and LFL.initial_room ~= Game():GetRoom() then 
-		LFL.initial_room = nil
+	if LFL.scanning or not LFL.initial_room_idx then
+		return
+	end
+
+	-- Compare room indexes (plain numbers) instead of Room userdata objects.
+	if Game():GetLevel():GetCurrentRoomIndex() ~= LFL.initial_room_idx then
+		LFL.initial_room_idx = nil
 		LFL.found_item = false
 	end
 end)
