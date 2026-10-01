@@ -11,12 +11,16 @@
 [*] The message will not disappear unless the player moves to another room.
 [/list]
 
-[h1]Fixes (Version 1.6)[/h1]
+[h1]Fixes (Version 1.7)[/h1]
 [list]
-[*] Somehow, some adjacent rooms to the treasure rooms still showed up in the map. This is now fixed.
-[*] This mod caused the golden treasure room in Greed mode to stay open and does not seem to be a primitive solution. Therefore, Greed mode won't be supported by this mod until this issue is solved. 
-[/list]</description>
-    <version>1.6</version>
+[*] Some adjacent rooms to the treasure rooms showed up in the map as visited. This is now fixed in the current version.
+[/list]
+
+[h1]Important Note[/h1]
+Since [url=https://github.com/filipondios/looking-for-ludovico/tree/b651cb3efbe24b0181c9a08f9896a5ad69c8aef2]version 1.6[/url], this mod caused the golden treasure room in Greed mode to stay open and does not seem to be a primitive solution. Therefore, Greed mode won't be supported by this mod until this issue is solved.
+
+</description>
+    <version>1.7</version>
     <visibility>Public</visibility>
     <tag id="Lua"/>
     <tag id="Tweaks"/>
