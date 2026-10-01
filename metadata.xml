@@ -17,9 +17,7 @@
 [/list]
 
 [h1]Important Note[/h1]
-Since [url=https://github.com/filipondios/looking-for-ludovico/tree/b651cb3efbe24b0181c9a08f9896a5ad69c8aef2]version 1.6[/url], this mod caused the golden treasure room in Greed mode to stay open and does not seem to be a primitive solution. Therefore, Greed mode won't be supported by this mod until this issue is solved.
-
-</description>
+Since [url=https://github.com/filipondios/looking-for-ludovico/tree/b651cb3efbe24b0181c9a08f9896a5ad69c8aef2]version 1.6[/url], this mod caused the golden treasure room in Greed mode to stay open and does not seem to be a primitive solution. Therefore, Greed mode won't be supported by this mod until this issue is solved.</description>
     <version>1.7</version>
     <visibility>Public</visibility>
     <tag id="Lua"/>
